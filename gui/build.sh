@@ -13,6 +13,7 @@ swiftc -O -swift-version 5 -parse-as-library -target x86_64-apple-macos14.0 \
 lipo -create -output "$APP/Contents/MacOS/TemasClaude" $OUT/TemasClaude-arm64 $OUT/TemasClaude-x86_64
 
 cp ../instalar-tema-claude.command "$APP/Contents/Resources/"
+cp -R ../proxy ../themes "$APP/Contents/Resources/"
 
 # Ícono
 "$APP/Contents/MacOS/TemasClaude" --icon $OUT/icon.png

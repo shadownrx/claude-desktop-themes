@@ -2,28 +2,37 @@
 
 Colores propios para la app de escritorio de Claude en macOS: Full Black, Dracula, Nord, Solarized Dark, Tokyo Night, o tu propio JSON.
 
-> **No es oficial.** Este proyecto no está hecho ni respaldado por Anthropic. Funciona modificando tu copia de Claude Desktop; leé [qué cambia](#qué-cambia-en-tu-mac) antes de instalar.
+> **No es oficial.** Este proyecto no está hecho ni respaldado por Anthropic. Desde la versión 2 **no modifica Claude.app**, pero instala un certificado de confianza y un proxy local para claude.ai. Leé [qué se instala](#qué-se-instala-y-qué-riesgo-tiene) antes de usarlo.
 
 <p align="center">
   <img src="docs/instalar.png" width="49%" alt="Primera instalación: elegís un tema y aceptás las advertencias">
-  <img src="docs/aplicar.png" width="49%" alt="Con un tema instalado: elegís otro y lo aplicás">
+  <img src="docs/aplicar.png" width="49%" alt="Con un tema instalado: elegís otro, lo aplicás o abrís Claude con tema">
 </p>
 
 ## Instalar
 
 1. Descargá **[Temas-para-Claude.zip](https://github.com/shadownrx/claude-desktop-themes/releases/latest/download/Temas-para-Claude.zip)** y descomprimilo.
 2. Abrí **Temas para Claude**. La primera vez macOS la bloquea porque no está firmada por un desarrollador de Apple: andá a **Ajustes del Sistema → Privacidad y seguridad** y tocá **Abrir igualmente**.
-3. Elegí un tema, marcá **Entiendo y quiero instalar** y tocá **Instalar**. La app cierra Claude, lo modifica y lo vuelve a abrir (1-2 minutos).
-4. Cuando macOS pida permiso para **"Claude Safe Storage"**, poné tu contraseña y elegí **Permitir siempre**. Si lo negás, Claude pierde el login.
+3. Elegí un tema, marcá **Entiendo y quiero instalar** y tocá **Instalar**. macOS te pide tu contraseña para confiar el certificado de claude.ai.
+4. Tocá **Abrir Claude con tema**. También queda **Claude con tema** en `~/Applications`, que podés arrastrar al Dock.
 5. En Claude, poné la apariencia en **modo oscuro**. Los temas solo se aplican ahí.
-
-Si macOS dice que la app no puede modificar otras apps, activá **Temas para Claude** en **Ajustes del Sistema → Privacidad y seguridad → Gestión de apps** y volvé a tocar **Instalar**.
 
 **Requisitos:** macOS 14 o posterior, Claude Desktop en `/Applications` y [Node.js](https://nodejs.org) (`brew install node`). Probado con Claude 5.1231.0.
 
+## Qué se instala y qué riesgo tiene
+
+Claude Desktop no tiene temas. Su interfaz es la página `https://claude.ai`, así que el tema se agrega en el camino:
+
+- **Proxy local.** Escucha solo en `127.0.0.1:8737` y corre como agente de launchd (`local.claude-desktop-themes.proxy`). Solo atiende `claude.ai` y rechaza cualquier otro destino. **Descifra el tráfico de claude.ai** para agregar un `<style>` en las páginas HTML; lo demás pasa sin cambios: API, streaming y WebSockets. No guarda ni envía contenido. El log (`~/.claude/desktop-themes/proxy.log`) registra solo arranques, inyecciones y errores.
+- **Certificado de confianza para claude.ai.** Se genera en tu Mac, sobre una CA local restringida por *name constraints* a `claude.ai`. La clave privada de la CA se borra apenas firma el certificado, así que nadie puede emitir otros certificados con ella. macOS te pide la contraseña para confiar en ella (solo para SSL).
+- **El riesgo que queda.** Mientras esté instalado, la clave del certificado de claude.ai está en `~/.claude/desktop-themes/tls/claude.ai.key`, legible solo por tu usuario. Un programa malicioso que corra con tu usuario y la lea podría hacerse pasar por claude.ai en tu Mac. Ese mismo programa ya podría leer tus cookies, pero es una puerta más: si no la necesitás, desinstalá.
+- **Lanzador.** **Claude con tema** abre Claude con `--proxy-pac-url`, y solo `claude.ai` pasa por el proxy. Si abrís Claude desde el Dock, funciona normal y sin tema. Si el proxy no responde, Claude se conecta directo.
+
+**Claude.app no se toca.** Conserva la firma de Anthropic, el hardened runtime, el acceso al llavero, las passkeys, el registro del dispositivo en el Secure Enclave, el conector de Microsoft 365, los permisos de macOS y las actualizaciones automáticas.
+
 ## Cambiar de tema
 
-Abrí la app, elegí otro tema y tocá **Aplicar**. Después apretá `Cmd+R` en Claude. No hace falta volver a instalar.
+Abrí la app, elegí otro tema y tocá **Aplicar**. Después apretá `Cmd+R` en Claude.
 
 ## Tu propio tema
 
@@ -58,39 +67,39 @@ Tocá **Cargar JSON…** y elegí un archivo así (solo `background` es obligato
 
 En [`themes/`](themes) están los temas incluidos como ejemplo.
 
-## Qué cambia en tu Mac
-
-Claude Desktop no tiene temas, así que esto modifica la app:
-
-- **Firma:** Claude queda firmado ad hoc, ya no por Anthropic.
-- **Llavero:** al abrirlo, macOS pide permiso para "Claude Safe Storage".
-- **Funciones que dejan de andar:** las passkeys y llaves de seguridad (WebAuthn) dentro de la app, y el conector de Microsoft 365. Para firmar ad hoc hay que sacar tres entitlements atados al equipo de Anthropic: `application-identifier`, `team-identifier` y `keychain-access-groups`.
-- **Permisos:** hay que volver a dar Accesibilidad, Grabación de pantalla y Micrófono, si los usás.
-- **Actualizaciones:** cada actualización de Claude borra el tema. Abrí la app y tocá **Instalar** de nuevo.
-- **Copia de seguridad:** antes de tocar nada se guarda una copia completa de Claude original (unos 620 MB) en `~/claude-desktop-theme/backup-<versión>/`.
-
 ## Desinstalar
 
-Abrí la app y tocá **Desinstalar**. Claude vuelve a la versión original de Anthropic, con su firma. También podés reinstalar Claude desde [claude.ai/download](https://claude.ai/download).
+Abrí la app y tocá **Desinstalar**. Se borran el agente del proxy, el certificado del llavero, la clave, el lanzador y los archivos del proxy. Quedan tus temas en `~/.claude/desktop-themes`. Claude no cambió, así que solo tenés que volver a abrirlo normal.
+
+## Si usaste la versión 1.0
+
+La 1.0 **modificaba Claude.app**: lo firmaba ad hoc y le quitaba entitlements. Con eso se perdían las passkeys, el conector de Microsoft 365 y el registro del dispositivo en el Secure Enclave, que permite usar tu Mac desde Claude en otros dispositivos. Además, sin hardened runtime, otros procesos podían inyectar código en Claude.
+
+La versión 2 lo detecta. Al tocar **Instalar**, primero restaura el Claude.app original de Anthropic desde la copia que guardó la 1.0, en `~/claude-desktop-theme/backup-<versión>/`. Para eso Claude tiene que estar cerrado, y macOS puede pedir el permiso **Gestión de apps**. Si no está la copia, reinstalá Claude desde [claude.ai/download](https://claude.ai/download).
 
 ## Sin interfaz (Terminal)
 
-[`instalar-tema-claude.command`](instalar-tema-claude.command) hace lo mismo desde Terminal; la app lo usa por dentro:
+[`instalar-tema-claude.command`](instalar-tema-claude.command) hace lo mismo desde Terminal; la app lo usa por dentro. Necesita la carpeta [`proxy/`](proxy) a su lado (cloná el repo):
 
 ```sh
-zsh instalar-tema-claude.command                     # instalar (pregunta el tema)
+zsh instalar-tema-claude.command                     # instalar
 zsh instalar-tema-claude.command --theme mi.json     # cambiar de tema
 zsh instalar-tema-claude.command --uninstall         # desinstalar
 ```
 
 ## Cómo funciona
 
-- Se agrega un script al inicio de `.vite/build/index.pre.js`, dentro de `app.asar`. Ese script inserta el CSS del tema en las páginas de claude.ai.
-- El tema activo está en `~/.claude/desktop-themes/active`. Cada JSON se convierte en CSS que pisa las variables de color de claude.ai: `--cds-gray-*`, `--cds-hsl-gray-*`, `--cds-surface-*` y `--cds-fizzy-lake-color-*`.
-- Electron 45 valida la integridad de `app.asar` de dos formas: con un hash en `Info.plist` (`ElectronAsarIntegrity`) y con una huella SHA256 de ese diccionario guardada en `Electron Framework`. El instalador actualiza las dos y vuelve a firmar ad hoc el framework, los helpers y la app.
-- `~/.claude/desktop-themes/debug.log` registra cada inyección. Sirve para diagnosticar si el tema no aparece.
+- [`proxy/cdt-proxy.js`](proxy/cdt-proxy.js) es el proxy, en Node y sin dependencias. Sirve `/proxy.pac`, que manda solo `claude.ai` al proxy. Termina TLS con el certificado local y reenvía cada pedido a claude.ai. En las respuestas HTML de navegación agrega `<style id="cdt-theme">` antes de `</head>`.
+- [`proxy/theme-json.js`](proxy/theme-json.js) convierte el JSON en CSS que pisa las variables de color de claude.ai: `--cds-gray-*`, `--cds-hsl-gray-*`, `--cds-surface-*` y `--cds-fizzy-lake-color-*`. El tema se relee en cada carga, así que `Cmd+R` alcanza.
+- [`proxy/gen-cert.sh`](proxy/gen-cert.sh) genera la CA restringida y el certificado de claude.ai, y borra la clave de la CA.
+- [`proxy/abrir-claude.sh`](proxy/abrir-claude.sh) es el lanzador. Si Claude está abierto sin tema, pregunta antes de reiniciarlo.
+- Funciona por estas condiciones, comprobadas con Claude 5.1231.0:
+  - Claude no bloquea `--proxy-pac-url`.
+  - Su verificación de certificados solo rechaza una lista fija de CAs.
+  - La CSP de claude.ai no restringe estilos.
+  - Los CSS no usan SRI.
 
-Si claude.ai cambia sus variables de color, el tema puede dejar de verse aunque el log diga `insertCSS ok`.
+Si claude.ai cambia sus variables de color o agrega `style-src` a su CSP, el tema deja de verse, sin romper nada más.
 
 ## Compilar la app
 

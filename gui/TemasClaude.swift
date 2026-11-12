@@ -99,18 +99,26 @@ final class Model: ObservableObject {
     @Published var themes: [Theme] = Theme.presets
     @Published var selected: Theme = Theme.presets[0]
     @Published var version = "?"
-    @Published var installed = false
+    @Published var proxyOK = false        // proxy local respondiendo
+    @Published var trusted = false        // certificado de claude.ai confiable en el llavero
+    @Published var launcherOK = false     // ~/Applications/Claude con tema.app existe
+    @Published var legacyPatched = false  // Claude.app modificado por la versión 1.x
     @Published var activeName: String?
     @Published var accepted = false
     @Published var phase: Phase = .idle
     @Published var log = ""
     @Published var showLog = false
 
-    let appPath = ProcessInfo.processInfo.environment["APP"] ?? "/Applications/Claude.app"
-    var isTest: Bool { appPath != "/Applications/Claude.app" }
-    let themesDir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["HOME"] ?? NSHomeDirectory()).appendingPathComponent(".claude/desktop-themes")
+    // CDT_* solo para pruebas (los hereda el instalador)
+    let env = ProcessInfo.processInfo.environment
+    var appPath: String { env["CDT_CLAUDE"] ?? "/Applications/Claude.app" }
+    var home: String { env["CDT_HOME"] ?? NSHomeDirectory() }
+    var port: String { env["CDT_PORT"] ?? "8737" }
+    var themesDir: URL { URL(fileURLWithPath: home).appendingPathComponent(".claude/desktop-themes") }
+    var launcherPath: String { home + "/Applications/Claude con tema.app" }
     var installer: String { Bundle.main.path(forResource: "instalar-tema-claude", ofType: "command") ?? "" }
     var claudeExists: Bool { FileManager.default.fileExists(atPath: appPath) }
+    var installed: Bool { proxyOK && trusted && launcherOK }
     var busy: Bool { if case .running = phase { return true }; return false }
 
     init() { loadUserThemes(); refresh() }
@@ -118,8 +126,13 @@ final class Model: ObservableObject {
     func refresh() {
         let plist = NSDictionary(contentsOfFile: appPath + "/Contents/Info.plist")
         version = plist?["CFBundleShortVersionString"] as? String ?? "?"
-        let sig = Self.run("/usr/bin/codesign", ["-dv", appPath])
-        installed = sig.contains("Signature=adhoc")
+        legacyPatched = Self.run("/usr/bin/codesign", ["-dv", appPath]).contains("Signature=adhoc")
+        proxyOK = Self.run("/usr/bin/curl", ["-s", "-m", "2", "http://127.0.0.1:\(port)/health"]).contains("\"ok\":true")
+        let crt = themesDir.appendingPathComponent("tls/claude.ai.crt").path
+        trusted = env["CDT_SKIP_TRUST"] != nil ? FileManager.default.fileExists(atPath: crt)
+            : FileManager.default.fileExists(atPath: crt) &&
+              Self.status("/usr/bin/security", ["verify-cert", "-c", crt, "-p", "ssl", "-s", "claude.ai", "-q"]) == 0
+        launcherOK = FileManager.default.fileExists(atPath: launcherPath)
         activeName = nil
         if installed, let slug = try? String(contentsOf: themesDir.appendingPathComponent("active"), encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines), slug != "none" {
@@ -160,24 +173,27 @@ final class Model: ObservableObject {
         do { try t.json.write(to: tmp) } catch { phase = .failed(error.localizedDescription); return }
         let quick = installed
         Task {
-            if !quick { await quitClaude() }
+            if legacyPatched { await quitClaude() }   // para restaurar Claude.app tiene que estar cerrado
             await runInstaller(["--theme", tmp.path, "--yes"],
-                               running: quick ? "Aplicando \(t.name)…" : "Instalando \(t.name)… (1-2 minutos)",
+                               running: quick ? "Aplicando \(t.name)…" : "Instalando \(t.name)…",
                                done: quick ? "\(t.name) aplicado. En Claude apretá Cmd+R para verlo."
-                                           : "Listo. Claude se está abriendo: cuando macOS pida \"Claude Safe Storage\", poné tu contraseña y elegí \"Permitir siempre\". Después poné la apariencia en modo oscuro.")
+                                           : "Listo. Abrí Claude con \"Abrir Claude con tema\" (o desde ~/Applications/Claude con tema) y poné la apariencia en modo oscuro.")
         }
     }
 
     func uninstall() {
         Task {
-            await quitClaude()
-            await runInstaller(["--uninstall", "--yes"], running: "Restaurando Claude original…",
-                               done: "Claude volvió a la versión original de Anthropic.")
+            await runInstaller(["--uninstall", "--yes"], running: "Desinstalando…",
+                               done: "Desinstalado: se borraron el proxy, el certificado y el lanzador. Claude no se tocó; reabrilo normal y se ve como siempre.")
         }
     }
 
+    func openClaude() {
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: launcherPath), configuration: .init())
+    }
+
     private func quitClaude() async {
-        guard !isTest else { return }
+        guard env["CDT_CLAUDE"] == nil else { return }
         let apps = NSRunningApplication.runningApplications(withBundleIdentifier: "com.anthropic.claudefordesktop")
         guard !apps.isEmpty else { return }
         phase = .running("Cerrando Claude…")
@@ -236,6 +252,13 @@ final class Model: ObservableObject {
         var seen = Set<String>()
         return parts.filter { seen.insert($0).inserted }.joined(separator: ":")
     }()
+
+    static func status(_ exe: String, _ args: [String]) -> Int32 {
+        let p = Process(); p.executableURL = URL(fileURLWithPath: exe); p.arguments = args
+        p.standardOutput = FileHandle.nullDevice; p.standardError = FileHandle.nullDevice; p.standardInput = FileHandle.nullDevice
+        guard (try? p.run()) != nil else { return -1 }
+        p.waitUntilExit(); return p.terminationStatus
+    }
 
     static func run(_ exe: String, _ args: [String]) -> String {
         let p = Process(); p.executableURL = URL(fileURLWithPath: exe); p.arguments = args
@@ -332,6 +355,9 @@ struct ContentView: View {
             if !m.claudeExists {
                 banner("No encuentro Claude en \(m.appPath). Instalalo desde claude.ai/download.", "exclamationmark.triangle.fill", .orange)
             }
+            if m.legacyPatched {
+                banner("Claude está modificado por la versión anterior de esta app (firma ad hoc, sin registro de dispositivo ni passkeys). Al instalar, primero se restaura la versión original de Anthropic; macOS puede pedir el permiso \"Gestión de apps\".", "exclamationmark.triangle.fill", .orange)
+            }
             HStack {
                 Text("Elegí un tema").font(.headline)
                 Spacer()
@@ -363,8 +389,9 @@ struct ContentView: View {
             }
             Spacer()
             HStack(spacing: 6) {
-                Circle().fill(m.installed ? Color.green : Color.secondary).frame(width: 7, height: 7)
-                Text(m.installed ? "Claude \(m.version) · \(m.activeName ?? "tema instalado")" : "Claude \(m.version) · original")
+                Circle().fill(m.installed ? Color.green : (m.proxyOK || m.trusted || m.launcherOK) ? Color.orange : Color.secondary).frame(width: 7, height: 7)
+                Text(m.installed ? "Claude \(m.version) · \(m.activeName ?? "tema instalado")"
+                     : (m.proxyOK || m.trusted || m.launcherOK) ? "Claude \(m.version) · instalación incompleta" : "Claude \(m.version) · sin tema")
                     .font(.system(size: 12, weight: .medium))
             }
             .padding(.horizontal, 10).padding(.vertical, 5)
@@ -375,13 +402,13 @@ struct ContentView: View {
     var risks: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("Antes de instalar", systemImage: "exclamationmark.shield").font(.system(size: 13, weight: .semibold))
+            Text("Claude.app no se modifica: conserva la firma de Anthropic, el llavero, las passkeys, el registro del dispositivo, los permisos y las actualizaciones. Lo que sí se instala:")
+                .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 4) {
-                bullet("Claude Desktop no tiene temas: esto modifica la app y queda firmada ad hoc, no por Anthropic.")
-                bullet("Al abrirla, macOS pide permiso para \"Claude Safe Storage\": elegí \"Permitir siempre\" o se pierde el login.")
-                bullet("Dejan de andar las passkeys dentro de la app y el conector de Microsoft 365.")
-                bullet("Hay que volver a dar Accesibilidad, Grabación de pantalla y Micrófono si los usás.")
-                bullet("Cada actualización de Claude borra el tema: volvé a abrir esta app e instalalo de nuevo.")
-                bullet("Se guarda una copia de la app original (~620 MB). \"Desinstalar\" la vuelve a poner.")
+                bullet("Un certificado que tu Mac va a confiar para claude.ai (macOS pide tu contraseña). Está restringido a claude.ai y la clave que lo emitió se borra: no sirve para otros sitios.")
+                bullet("Un proxy local (solo 127.0.0.1) que descifra el tráfico de claude.ai para agregar el tema. No guarda ni envía nada.")
+                bullet("Mientras esté instalado, un programa que corra con tu usuario y lea la clave del certificado podría hacerse pasar por claude.ai en tu Mac.")
+                bullet("El tema se ve solo si abrís Claude con \"Claude con tema\". Desde el Dock, Claude abre normal y sin tema.")
             }
             Toggle("Entiendo y quiero instalar", isOn: $m.accepted).toggleStyle(.checkbox).padding(.top, 2)
         }
@@ -413,10 +440,14 @@ struct ContentView: View {
 
     var actions: some View {
         HStack {
-            if m.installed {
+            if m.installed || m.proxyOK || m.trusted || m.launcherOK {
                 Button("Desinstalar", role: .destructive, action: m.uninstall).disabled(m.busy)
             }
             Spacer()
+            if m.installed {
+                Button(action: m.openClaude) { Label("Abrir Claude con tema", systemImage: "arrow.up.forward.app") }
+                    .controlSize(.large).disabled(m.busy)
+            }
             Button(action: m.apply) {
                 Text(m.installed ? "Aplicar \(m.selected.name)" : "Instalar \(m.selected.name)").frame(minWidth: 140)
             }
