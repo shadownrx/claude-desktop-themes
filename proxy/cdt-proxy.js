@@ -143,6 +143,10 @@ function handleMitmUpgrade(req, socket, head) {
 }
 
 function loadTls() {
+  const pfx = path.join(TLS_DIR, "claude.ai.pfx"); // Windows: lo genera New-SelfSignedCertificate
+  if (fs.existsSync(pfx)) {
+    return tls.createSecureContext({ pfx: fs.readFileSync(pfx), passphrase: fs.readFileSync(path.join(TLS_DIR, "pfx.pass"), "utf8").trim() });
+  }
   return tls.createSecureContext({
     key: fs.readFileSync(path.join(TLS_DIR, "claude.ai.key")),
     cert: fs.readFileSync(path.join(TLS_DIR, "claude.ai.crt")),

@@ -77,6 +77,24 @@ La 1.0 **modificaba Claude.app**: lo firmaba ad hoc y le quitaba entitlements. C
 
 La versión 2 lo detecta. Al tocar **Instalar**, primero restaura el Claude.app original de Anthropic desde la copia que guardó la 1.0, en `~/claude-desktop-theme/backup-<versión>/`. Para eso Claude tiene que estar cerrado, y macOS puede pedir el permiso **Gestión de apps**. Si no está la copia, reinstalá Claude desde [claude.ai/download](https://claude.ai/download).
 
+## Windows (beta)
+
+> **Beta sin probar en Windows.** Se escribió y revisó en macOS. Es el mismo mecanismo (proxy local y certificado restringido a claude.ai), pero los scripts de PowerShell nunca corrieron en Windows real. Si algo falla, desinstalá y abrí un issue.
+
+1. Instalá [Node.js](https://nodejs.org) (`winget install OpenJS.NodeJS.LTS`).
+2. Descargá **Temas-para-Claude-Windows-beta.zip** de la [release beta](https://github.com/shadownrx/claude-desktop-themes/releases) y descomprimilo.
+3. Doble clic en **instalar-windows.cmd**. Escribí `SI` y confirmá el aviso de seguridad de Windows sobre el certificado.
+4. Abrí Claude con **Claude con tema** desde el menú Inicio y poné la apariencia en modo oscuro.
+
+Cambiar de tema: `instalar-windows.cmd -Theme mi-tema.json` y `Ctrl+R` en Claude. Desinstalar: `instalar-windows.cmd -Uninstall`.
+
+Diferencias con macOS:
+
+- **Sin interfaz:** solo hay scripts.
+- **Arranque del proxy:** lo arranca un `.vbs` en la carpeta Inicio, en lugar de launchd.
+- **Certificado:** sale de `New-SelfSignedCertificate`. El instalador verifica que la CA quede restringida a `claude.ai` antes de confiarla; si no lo está, no instala nada.
+- **Cómo se abre Claude:** el lanzador busca `%LOCALAPPDATA%\AnthropicClaude\claude.exe` o el alias del paquete MSIX en `%LOCALAPPDATA%\Microsoft\WindowsApps`. Que el alias del MSIX le pase `--proxy-pac-url` a Claude es justo lo que falta comprobar.
+
 ## Sin interfaz (Terminal)
 
 [`instalar-tema-claude.command`](instalar-tema-claude.command) hace lo mismo desde Terminal; la app lo usa por dentro. Necesita la carpeta [`proxy/`](proxy) a su lado (cloná el repo):
