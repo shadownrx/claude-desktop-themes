@@ -1,0 +1,14 @@
+{
+  "name": "Tokyo Night",
+  "colors": {
+    "background": "#1a1b26",
+    "sidebar": "#16161e",
+    "card": "#24283b",
+    "popover": "#292e42",
+    "input": "#292e42",
+    "border": "#3b4261",
+    "text": "#c0caf5",
+    "textSecondary": "#a9b1d6",
+    "textMuted": "#737aa2"
+  }
+}

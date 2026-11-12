@@ -1,0 +1,11 @@
+{
+  "name": "Full Black",
+  "colors": {
+    "background": "#000000",
+    "sidebar": "#0a0a0a",
+    "card": "#141414",
+    "popover": "#1a1a1a",
+    "input": "#262626",
+    "border": "#333333"
+  }
+}

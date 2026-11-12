@@ -1,0 +1,14 @@
+{
+  "name": "Dracula",
+  "colors": {
+    "background": "#282a36",
+    "sidebar": "#21222c",
+    "card": "#343746",
+    "popover": "#44475a",
+    "input": "#44475a",
+    "border": "#6272a4",
+    "text": "#f8f8f2",
+    "textSecondary": "#d6d6e6",
+    "textMuted": "#8b93b8"
+  }
+}

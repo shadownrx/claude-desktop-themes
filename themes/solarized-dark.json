@@ -1,0 +1,14 @@
+{
+  "name": "Solarized Dark",
+  "colors": {
+    "background": "#002b36",
+    "sidebar": "#00252f",
+    "card": "#073642",
+    "popover": "#0a4251",
+    "input": "#0a4251",
+    "border": "#2a5561",
+    "text": "#eee8d5",
+    "textSecondary": "#93a1a1",
+    "textMuted": "#6c8389"
+  }
+}
